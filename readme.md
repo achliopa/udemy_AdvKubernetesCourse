@@ -43,7 +43,7 @@
 	* Logtrail (UI to show logs, a plugin for kibana)
 * this stack can be customized to create custom dashboards
 
-### Lecture 5 - Logging with fluentd + ElasticSearch + Kibana + LogTrail (part I)
+### Lecture 5 - Logging with Fluentd + ElasticSearch + Kibana + LogTrail (part I)
 
 * we goto CourseRepo/logging where we have README.md with all the setup commands.
 * we will use kops to spin a cluster on AWS through vagrant
@@ -57,10 +57,29 @@ vagrant ssh
 * we spin up a cluster with medium sized nodes (3). its pretty expensive so we have to finish fast.
 * we use the basic course s3 state repo and domain in rout53 `kops create cluster --name=k8s.agileng.io --state=s3://kops-state-4213432 --zones=eu-central-1a --node-count=3 --node-size=t2.medium --master-size=t2.micro --dns-zone=k8s.agileng.io`
 * we update `kops update cluster k8s.agileng.io --yes --state=s3://kops-state-4213432`
-* first script we look at is es-statefulset.yaml. it sets a ServiceRole, ClusterRole and CLusterRoleBinding and a StatefulSet with elasticsearch (2 replicas) with resource limits and storage (volume) using standard storage defined in storage.yml (8gb) for each replica. we use StaticSet instead of Deployment when we need static hostnames. ElasticSearch needs the static hostnames to work. th pods of ES launch an initcontainer to run a priviledge command to set kernel param
+* first script we look at is es-statefulset.yaml. it sets a ServiceRole, ClusterRole and CLusterRoleBinding and a StatefulSet with elasticsearch (2 replicas) with resource limits and storage (volume) using standard storage defined in storage.yml (8gb) for each replica. make susre to set correct availability zone to be same with cluster we use StaticSet instead of Deployment when we need static hostnames. ElasticSearch needs the static hostnames to work. th pods of ES launch an initcontainer to run a priviledge command to set kernel param
 * ES has another config WAMl es-service.yaml to set a Service for ES exposing port 9200
 * we have fluentd-es-ds.yaml for fluentd deployment. we have authorization with RBAC. and a DeamonSet deployment. to run a signle pod on each node. a lot of env aparams and volumes
 * the template for fluentd has a nodeselector
 * we have a fluentd-config-map.yaml. with config of how logs are mapped and config of fluentd. it captures input and converts it to JSON format to feed it to elasticsearch
 * to view the logs we use kibana kibana-deployment.yaml. it is a deployment of tutors custom image (kibana+logtrail)
 * XPACK monitoruing and security is disabled (in free version) we need to implement our own authentication on loadbalancer or filter ips as loadbalancer is public
+
+### Lecture 6 - Logging with Fluentd + ElasticSearch + Kibana + LogTrail (part II)
+
+* `kops version` is 1.10.0
+* `kubectl get nodes` gives me the 3 nodes
+* i label the nodes `for i in `kubectl get node |cut -d ' ' -f 1 |grep internal` ; do kubectl label nodes ${i} beta.kubernetes.io/fluentd-ds-ready=true ; done`
+* i execute all scripts `kubectl create -f .`
+* all pods are in kube-system namespace `kubectl get pods --namespace=kube-system`
+* we go to AWS to see the instances. we have 1 LB for kibana. we can add it to ROUTe53
+* we need to edit security groupo and add our IP address. we add ELB security group edit inbound rules limiting to only our ip. we visit `http://a1bf4c60b07d011e984300210e252538-1878325862.eu-central-1.elb.amazonaws.com:5601`
+* we see kibana landpage. we set indexname to logstash-* as fluentd is a replacement for logstash and click create
+* we select discover. we see the jsons of the logs created
+* we click logtrail plugin and see a combined log trail. we can filter and use kibana to customize it
+
+## Section 3 - Authentication
+
+### Lecture 7 - HTTP Basic Authentication in Kubernetes
+
+* 

@@ -82,4 +82,53 @@ vagrant ssh
 
 ### Lecture 7 - HTTP Basic Authentication in Kubernetes
 
-* 
+* by default X509 certificates are used to authenticate yourself to the kubernetes api-server (with kubectl)
+* these certs were issued when we created the cluster for the first time
+* if we use minikube or kops this is done for us (first thing kops does)
+* in first course we saw how to create new users generating new certs and siging them with the Cert Authority used by k8s
+* k8s api server is based on http. one option is to use http basic auth. HTTP Basic Auth only requires us to send a username and password to the API server
+* While simple for the user. a user-password combo is less secure and difficult to maintain in k8s
+* to enable basic auth we can use a static password file on the K8s master
+* the path to this static password file needs to be passed to the apiserver as an argument `--basic-auth-file=/path/to/somefile`
+* the file needs to be formatted as `password,user,uid,"group1,group2,group3"`
+* the basic auth has downsides:
+	* its only supported for convenience. k8s team works on making teh more secure methods easier to use
+	* to add (or edit) a user the api-server needs to be restarted
+
+### Lecture 8 - Authentication using a Proxy
+
+* another way to handle authentication is to use a proxy
+* when using a proxy we can handle the authentication part ourselves
+* we can write our own authentication mech and provide the username, and groups to the k8s API once the user is authenticate
+* this is agood solution if the k8s does not support the authentication method we want
+* Proxy setup needs the following steps:
+	* proxy needs a client cerificate signed by the cert authority that is passed to the api server using --requestheader-client-ca-file
+	* the proxy needs to handle the authentication (using a form, basic auth, or another mech)
+	* once the user is authenticated the proxy needs to forward the request to the k8s API server and set a HTTP header with the login
+	* this login http header is determined by a flag passed to the API server e.g: --requestheader-username-headers=X-Remote-User. in this case the proxy needs to set the X-Remote-User after authentication
+	* --requestheader-group-headers=X-Remote-Group can be used as an argument to set the group header
+	* --requestheader-extra-headers-prefix=X-Remote-Extra- allows us to set extra headers with extra info about the user
+
+### Lecture 9 - Authentication using OpenID Connect (IODC)
+
+* another (better) alternative is to use OpenID Connect tokens
+* OpenID Connect is built on top of OAuth2
+* it allows us to securely authenticate and then receive an ID Token
+* this ID token can be verified whether it really originated from the authentication server, because its signed (using HMAC SHA256 or RSA)
+* This ID token is a JWT. it contains known fields like username and optinally groups
+* Once this token is obtained it can be used as credential to authenticate to the apiserver
+* We can pass --token=<ourtoken> when executing kubectl commands
+* kubectl can automatically renew our token_id when it expires (this does not work with all identity providers)
+* with this token we can also authenticate to the K8s UI (to make it easier in demos a reverse proxy is created that can authenticate us with OpenID Connect and then pass the token to the UI)
+* The flow is: 
+	* User=>Identity Provider: Login to IdP
+	* IdP=>User: provide access_token, id_token and refresh_token
+	* User=>Kubectl: call kubectl with token being the id_token OR add tokens to. kubectl/config
+	* kubectl=> API server: Authorization: Bearer...
+	* APi server: is JWT signature valid?
+	* API server: Has the JWT expired? (iat+exp)
+	* API server: User Authorized?
+	* API server=> kubectl: Authorized: perform action and return result
+	* Kubectl=>User: Return result
+
+### Lecture 10 - Demo: OIDC with Auth0

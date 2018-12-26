@@ -131,4 +131,76 @@ vagrant ssh
 	* API server=> kubectl: Authorized: perform action and return result
 	* Kubectl=>User: Return result
 
-### Lecture 10 - Demo: OIDC with Auth0
+### Lecture 10 - Demo: OIDC with Auth0 (Part I)
+
+* Steps to take
+	* setup identity Provider (auth0 account)
+	* create auth0 client for kubernetes
+	* setup cluster withoidc (OpenID connect) using kops edit
+	* deploy authentication server (for UI proxy + to hand out bearer tokens)
+	* change env variables in deployment to match auth0
+	* create DNS record for auth server
+	* try log in to k8s UI through authentication server
+* we go to [auth0](https://auth0.com) a sit has a free tier. 
+	* we signup
+	* we create a new application => reegular web app (name=Kubernetes) => settings
+	* we get a domain, client id and client secret. the client secret needs to go to our auth server
+	* we have to specify the allowed callback urls (http://authserver.k8s.agileng.io/callback)
+	* we have to specify the allowed logout urls (http://authserver.k8s.agileng.io)
+	* we dont care about http in our loadbalancer we can redirect to https
+	* save changes
+* we need the domain url from auth0 in our cluster to spin in AWS
+* i ssh in vagrant vm and go to /advanced-kubernetes-course/authentication
+* it has a REAADME.md with instructions how to create a k8s ui and how to edit the cluster adding oidc
+* we c4reate the cluster `kops create cluster --name=k8s.agileng.io --state=s3://kops-state-4213432 --zones=eu-central-1a --node-count=2 --node-size=t2.micro --master-size=t2.micro --dns-zone=k8s.agileng.io`
+* we edit the cluster `kops edit cluster k8s.agileng.io --state=s3://kops-state-4213432` and add 
+```
+spec:
+  kubeAPIServer:
+    oidcIssuerURL: https://achliopa.eu.auth0.com/
+    oidcClientID: clientid #use your id from auth0
+    oidcUsernameClaim: sub
+```
+* we update the cluster to save changes
+
+### Lecture 11 - Demo: OIDC with Auth0 (Part II)
+
+* we wait till cluster is updated and create the K8s UI using `kubectl create -f https://raw.githubusercontent.com/kubernetes/kops/master/addons/kubernetes-dashboard/v1.6.3.yaml`
+* we have a Secrets YAML definition'auth0-secrets.yaml' where we add the client secretof auth0
+* we have the auth0-service.yaml which is a Loadbalancer listening to port 80
+* we have the auth0-deployment.yaml which is the Deployment of the k8s auth server (1 replica of tutors custom image using a number of env params which need to be adapted to our cluster)
+* we need to base64 encode the client secret before adding it to secrets `echo -n "<SECRET>" |base64`
+* what we are missiing is the  AUTH0_CONNECTION in auth0-deployment.yaml. in auth0.com in the application settings we go to  Connections => database. the name we put in should be the same as the value in the YAML file 'Username-Password-Authentication'
+* we need to eanable it. we to to applications => Kubernetes => Connections +> database => enable
+* we can create users in auth0. we create 1 for testing
+* we apply all in the repo folder. we look for pods. when it starts we check for services. we see the LB. we go to ROute53 and add it in hosted zone authserver.k8s.agileng.io (we can add tls cer with cert manager in aws)
+* the code for kubernetes-auth-server (python with flask) is in /advanced-kubernetes-course/kubernetes-auth-server. in auth0.com => clients there a re sample code for various tech (nodejs, go)
+* we hit authserver.k8s.agileng.io and we see the ui. pass in the login and get redirected to auth0. after succesfully loegd in we go to authserver.k8s.agileng.io/dashboard
+* we see our token content
+* if we click access ui. the auth server will reverse proxy to k8s api setting the token a shttp header
+* with the token k8s api server will validate our access
+
+### Lecture 12 - Demo: OIDC with Auth0 (Part III)
+
+* we will use kubectl to test auth0 on kubernetes.
+* we go to advanced-kubernetes-course/kubernetes-auth-server
+* we need to have python. we check `python3 --version` and `python --version`
+* we check dependencies `cat reuirements-cli.txt`
+* we install pip3 `sudo apt-get install python3-pip`
+* we install dependencies `pip3 install -r requirements-cli.txt`
+* solving locale issue with python `export LC_ALL=C`
+* we execute cli `./cli-auth.py` . we need to pass in as env vars AUTH0_CLIENT_ID AUTH)_DOMAIN APP_HOST `AUTH0_CLIENT_ID=Px5toCAsq3AzkdY2Q2M9m44ywhKIRjZe AUTH0_DOMAIN=achliopa.eu.auth0.com APP_HOST=authserver.k8s.agileng.io ./cli-auth.py` i login and get an error
+* in auth0 app settings we go to advanced settings and enable grant types-> password
+* we retry and we get an id token
+* this token is saven in .kube/id_token and in .kube/jwks.json
+* we can use the token with kubectl. to not write this token everytime we make an alias for kubectl `alias kubectl="kubectl --token=\$(AUTH0_CLIENT_ID=Px5toCAsq3AzkdY2Q2M9m44ywhKIRjZe AUTH0_DOMAIN=achliopa.eu.auth0.com APP_HOST=authserver.k8s.agileng.io ~/advanced-kubernetes-course/kubernetes-auth-server/cli-auth.py)"`
+* first we remove all users with `vim ~/.kube/config` (everything under users:)
+* we write `kubectl get nodes` login and we see the nodes.
+* all these are explaned in k8s documentation (authenticaiton -> openid tconnect token) (option 2)
+* if we dodn't use the convenience script wwe would have to insert the token explicitly
+
+## Section 4 - Authorization
+
+### Lecture 13 - Introduction to Authorization
+
+* 

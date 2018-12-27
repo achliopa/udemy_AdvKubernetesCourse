@@ -290,4 +290,50 @@ function (user, context, callback) {
 
 ### Lecture 17 - Introduction to Helm
 
+* Helm is the package manager for Kubernetes
+* it helps manage Kubernetes apps
+* Helm was started by Google and Deis (Deis provides a PaaS 'Platform as a Service' on K8s)
+* Deis is inspired by heroku but runs on K8s
+* the packaging format is called charts (a collection of files that describe a set of K8s resources)
+overriding values in template YAML files in charts is useful to make sure the app is configured in a way we want
+
+### Lecture 18 - Demo: Installing MySQL on K8s with Helm
+
+* we spin a k8s cluster on AW S using kops fr5om vagrant vm
+* we need the helm package on our local machine (have it in vagrant from previous course)
+* we go to /advanced-kubernetes-course/helm in README.md we have instructions
+* we run `helm init` it adds tiller in cluster `kubectl get pods -n kube-system` proves that
+* we run helm install command `helm install --name my-mysql --set mysqlRootPassword=secretpassword,mysqlUser=my-user,mysqlPassword=my-password,mysqlDatabase=my-database stable/mysql` with --set we set parmas.
+* we get an error `Error: release my-mysql failed: namespaces "default" is forbidden: User "system:serviceaccount:kube-system:default" cannot get namespaces in the namespace "default"` its a bug of RBAC
+* we delete tiller deployment `kubectl delete deploy tiller-deploy  -n kube-system`
+* we create a YAML file rbac.yml and add the code
+```
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiller
+  namespace: kube-system
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: tiller-clusterrolebinding
+subjects:
+- kind: ServiceAccount
+  name: tiller
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: ""
+```
+* we create - delete -create it
+* we run `helm init --upgrade`
+* we run install again
+* NOT WORKING we will do what we did in K8s basic course as that worked
+
+## Section 6 - The Job Resource
+
+### Lecture 19 - Introduction to the job resource
+
 * 

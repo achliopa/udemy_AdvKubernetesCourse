@@ -203,4 +203,91 @@ spec:
 
 ### Lecture 13 - Introduction to Authorization
 
+* authorization controls what the user can do. where does the user has access to
+* access control is implemented on API level (kube-apiserver)
+* when an API req comes in. (e.g when we enter kubectl get nodes) it will check whether we have access to execute the command
+* multiple authorization modules available:
+	* Node: a special purpose auth mode that authorizes API reqs made by kubelets
+	* ABAC: Attribute Access COntrol (access rights controlled by policies that combine attributes)
+	* RBAC: Role base access control: regulates access using roles. can dynamixcally config permission policies
+	* Webhook: sends authorization req to external REST interface (e.g if we have our own auth server). parse incoming JSON and rep with access granted or denied
+* To enable authorization mode we need to pass --authorization-mode= to the API at startup
+* when using kops we can create a cluster with flag --authrization. if we dont spec the flag. we allow everything. like specing --authorization AlwaysAllow
+* when specing --authorization RBAC the cluster will use RBAC
+* in running clusters we can edit (kops edit) and add in spec:
+```
+kubeAPIServer:
+	authorizationMode: RBAC
+```
+* in minikube at start `minikube start --extra-config=apiserver.Authorization.Mode=RBAC`
+
+### Lecture 14 - Introduction to RBAC
+
+* we can add RBAC resources with kubectl to grant permnissions (YAML => apply) 
+	* we define a Role, and assign users/groups to the role
+	* we can crerate roles for a namespace or crossnamespace, cluster roles
+* Resources for RBAC:
+	* Role (single namespace) or CLusterRole(cluster-wide)
+	* RoleBinding or CLusterRoleBinding to assign usersgroups to the role
+* A Role has a namespace: a ROle or ClusterRole have name: and rules:
+* in RoleBindings we have subjects: (kind: User or Group) and roleRef: )the role we bind to
+
+### Lecture 15 - Demo: authorizations - RBAC
+
+* RBAC demo with auth0
+* we are in vagrant vm and we cd to advanced-kubernetes-course/authorization
+* in README.md we see the instructions
+* we spin a cluster `kops create cluster --name=k8s.agileng.io --state=s3://kops-state-4213432 --zones=eu-central-1a --node-count=2 --node-size=t2.micro --master-size=t2.micro --dns-zone=k8s.agileng.io --authorization RBAC` and edit it to add auth0
+```
+spec:
+  kubeAPIServer:
+    oidcIssuerURL: https://achliopa.eu.auth0.com/
+    oidcClientID: Px5toCAsq3AzkdY2Q2M9m44ywhKIRjZe
+    oidcUsernameClaim: name
+    oidcGroupsClaim: http://authserver.k8s.agileng.io/claims/groups
+  authorization:
+    rbac: {}
+
+```
+* we update the cluster
+* we need to add configuration in auth0 => Application => extensions => authorization (Auth0 Authorization) => install => set our default user email => groups => create first group (name=developers)=> add members => our default user => save
+* click top right (our domain) => configuration => enable groups => publish rule
+* app => rules => cretate new rule => empty rule => del all code and replace with 
+```
+function (user, context, callback) {
+  var namespace = 'http://authserver.k8s.agileng.io/claims/'; // You can set your own namespace, but do not use an Auth0 domain
+
+  // Add the namespaced tokens. Remove any which is not necessary for your scenario
+  context.idToken[namespace + "permissions"] = user.permissions;
+  context.idToken[namespace + "groups"] = user.groups;
+  context.idToken[namespace + "roles"] = user.roles;
+  
+  callback(null, user, context);
+}
+```
+* this adds the group to the oidc token => save
+* we need to deploy our auth server from advanced-kubernetes-course/authentication/ `kubectl create -f .`
+* we also alias elb to route53 to nameset
+* we can deploy the authserver locally if we want to
+* we visit 'authserver.k8s.agileng.io' and login. we see that we are in gorup developers
+* we will create a role ink8s cluster and add group developers in the role. the YAML is /advanced-kubernetes-course/authorization/role.yml with a Role and RoleBinding
+* we will add a second account in the vagrant vm  so that we login with cert in one case and with auth0 on other case `sudo adduser k8s-test ` we swap user `sudo su - k8s-test`
+* i need to cp the ~/.kube/config from vagrant user as we want the CA of the cluster. we create a .kube/config file and cp the content up to users:
+* the we have to follow the part of authorization demo to attach the token to the kubectl command
+* we have forbidden msgs. we apply the rules and get access (as normal user)
+
+### Lecture 16 - Predefined and more complex roles
+
+* we can se more complex RBAC Role. setting multiple apiGroups each one with its own resources and verbs. this fine grains upon k8s API groups like batch, extensions, apps etc. the groups have to do with the resources they are applied on
+* we can use one of the predefined roles
+* Pre-Defined RBAC Roles:
+	* cluster-admin: super-user access. Can be used with ClusterRoleBinding (superuser access on the cluster) or with RoleBinding to limit access within a namespace
+	* admin: admin access, intended to be used only with RoleBinding. has read/write access within the namespace. but cannot change quotas
+	* edit: read/write access to most objects within the namspace. but cannot view/create new roles or rolebindings
+	* view:  read access/ but can't see any secrets roles or rolebindings
+
+## Section 5 - Package Management
+
+### Lecture 17 - Introduction to Helm
+
 * 

@@ -336,4 +336,16 @@ roleRef:
 
 ### Lecture 19 - Introduction to the job resource
 
-* 
+* till now we ve seen pods as longrunning services that dont stop (like webservers)
+* we can also schedule pods as Jobs rather than with ReplicationCOntroller/ReplicaSet
+* with RC or RS the pod will be indefiitely restarted if it stops/fails
+* with the Job resource, pods are expected to run a task and then exit
+* there are 3 main types of jobs:
+	* Non parallel Jobs: the Job resource will monitor the job. and restart the pod if it fails or gets deleted (we can control this with restartPolicy: attr). when pod successfully completes (exit with 0) job completes
+	* Parallel Jobs with fixed completion count: a Job can run multiple pods in parallel. we can spec a fixed completion count. job completes when succesfully exited pods == completion count (completions: attr)
+	* Parallel Jobs with work queue: pods should coordinate with themselves (or an external service) to determine what each should work on. when any pod terminates with success. no more pods are created and the job is considered completed. the job is considered completedif a pod terminates.
+
+### Lecture 20 - Demo: Running a Job
+
+* we spin acluster on AWS from vagrant
+* we go to ./adv

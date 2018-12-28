@@ -348,4 +348,150 @@ roleRef:
 ### Lecture 20 - Demo: Running a Job
 
 * we spin acluster on AWS from vagrant
-* we go to ./adv
+* we look at job.yml file that describes a Job resource that uses a perl pod to calculate pi
+* we apply it . a pod is create runs and completes
+
+### Section 7 - Scheduling
+
+### Lecture 21 - Scheduling with CronJob
+
+* a Cron job can schedule Job resources based on time
+	* once at a speced time
+	* recurrently
+	* CronJob resource is comparable with crontab in Linux/Unix systems
+* CronJob schedule format is same as crontab 
+	* e.g  every night at 3:20AM : `20 3 * * *` 
+	* every 15 minutes: `*/15 * * * *`
+* CronJob is still in alpha. it uses schedule: attr and jobTemplate: attr much like the pods
+
+### Lecture 22 - Demo: Using alpha resource CronJob
+
+* CronJob resource is now in beta. NO NEED to enable it in kubeAPIserver using kops edit
+* we DONT HAVE go to ./advanced-kubernetes-course/jobs  and  look at README.md for instructions. we need to mod the cluster with kops edit adding 
+```
+spec:
+  kubeAPIServer:
+    runtimeConfig:
+      batch/v2alpha1: "true"
+```
+* we look at cronjob.yml. it schedules every 1 minute to run busybox that willecho a message
+* we apply it after changing first line to `apiVersion: batch/v1beta1`
+* we look at cronjobs with `kubectl get cronjob`. we look in ti with `kubectl describe cronjob/hello`
+* we look in pods with --show-all and see every min anew completed pod. if we log in one we see the echo msg
+
+## Section 8 - Deploying on Kubernetes with Spinnaker
+
+### Lecture 23 - Introduction to Spinnaker
+
+* Spinnaker is a CD (Continuous Delivery) platform
+* It can automate deployments on different cloud providers (e.g AWS EC2, GCE, Azure, Openstack and Kubernetes)
+* It works only on immutable (cloud-native) apps (e.g docker images)
+* Created by Netflix
+* Integrates with CI tools (Jenkins,Travis) with monitoring tools and provides different  deployment strategies
+* Spinnaker has 2 core sets of features:
+	* Cluster Management: View and manage our cluster resources in the cloud (or in K8s)
+	* Deployment Management: Create and manage CD workflows, using a delivery pipeline
+* It supports various deployment strategies:
+	* Blue/Green (called Red/Black): using an LB and 2 groups of pods (deploy then switchover)
+	* Rolling Blue/Green (rolling Red/Black): start with small capacity (2 pods) when they are healthy add 2 more till all are updated
+	* Rolling Deployment with Canary analysis: not only health checks but in depth behaviour analysis before adding pods. Netflix does this
+* An example CD pipeline in SPinnaker: Start => Find image from TEST => Deploy CANARY => Waint 30 mins + Cutover manual approval => Deploy PROD (red/black) => Tear down CANARY + WAITH 2 hrs => Destroy old PROD
+* it uses 2 PROD environments PROD and CANARY
+* the terminology in SPinnaker is a bit different from K8s
+	* Account: maps to credentials able to authenticate agains K8s, and docker registries where your images are stored
+	* Instance: maps to a K8s pod
+	* Server Group: maps to a Replica Set
+	* Cluster: a 'Spinnaker deployment' on K8s. Spinnaker uses its own orchestration and is different from the Deployment on K8s
+	* Load Balancer: maps to a K8s service
+
+### Lecture 24 - Deploying on Kubernetes using Spinnaker (Part I)
+
+* we'll see how to:
+	* Setup spinnaker using helm on K8s cluster
+	* Configure spinnaker
+	* Deploy an app on K8s from SPinnaker
+* the pipeline we'll follow: commit to git repo => trigger from github a docker build => docker push => trigger spinnaker pipeline from docker registry => k8s deploy => app is live
+* we go to the course repo spinnaker folder advanced-kubernetes-course/spinnaker. we look in README.md for isntructions
+* we spin our cluster on AWS (we run 3 small nodes, tutor runs 1 small and 2 medium)
+* we need to seup helm. in /kubernetes-course/helm we apply helm-rbac.yaml
+* we run `helm init --service-account tiller`
+* we check spinnaker.yaml in /advanced-kubernetes-course/spinnaker
+* we need to make a few changes like our dockerhub repo our credentials
+* we use protforwarding on spinnaker. to expose it we need a loadbalancer
+* we run `helm install --name demo -f spinnaker.yml stable/spinnaker`
+* to see the new pods for spinnaker we run get pods
+* once spinnaker starts we need to connect to it using prot forwarding (kubectl port-forwarding). it always runs locally cannot bind a proxy address (--bind-adress) to hit is from browser on host while running from a vm
+* spinnaker how to
+```
+NOTES:
+1. You will need to create 2 port forwarding tunnels in order to access the Spinnaker UI:
+  export DECK_POD=$(kubectl get pods --namespace default -l "cluster=spin-deck" -o jsonpath="{.items[0].metadata.name}")
+  kubectl port-forward --namespace default $DECK_POD 9000
+
+2. Visit the Spinnaker UI by opening your browser to: http://127.0.0.1:9000
+
+To customize your Spinnaker installation. Create a shell in your Halyard pod:
+
+  kubectl exec --namespace default -it demo-spinnaker-halyard-0 bash
+
+For more info on using Halyard to customize your installation, visit:
+  https://www.spinnaker.io/reference/halyard/
+
+For more info on the Kubernetes integration for Spinnaker, visit:
+  https://www.spinnaker.io/reference/providers/kubernetes-v2/
+
+```
+* to overcome this given  we have kubectl installed on host we cp ~/.kube/config from vagrant vm to host
+* now from host system we access the AWS cluster
+* spinnaker installs jenkins
+* on host system we run `export DECK_POD=$(kubectl get pods --namespace default -l "cluster=spin-deck" -o jsonpath="{.items[0].metadata.name}")` and `kubectl port-forward --namespace default $DECK_POD 9000`
+* now we visit with browser localhost:9000 and see spinnaker running
+
+### Lecture 25 - Deploying on Kubernetes using Spinnaker (Part II)
+
+* we got to github [project repo](https://github.com/wardviaene/docker-demo) it has a simple node app and a Doxckerfile
+* we fork the project. we need to link it to dockerhub
+* we go to dockerhub and login. we link our dockerhub account with github account docker hub build
+* we create a new automated build in dockerhub
+	* we create anew repo spinnaker-node-demo in dockerhub. we can trigger a build with git push. or bmanually from dockerhub
+* we trigger a build from hub
+
+### Lecture 26 - Deploying on Kubernetes using Spinnaker (Part III)
+
+* we will configure spinnaker to use the build to do a new deployment
+* in loacalhost:9000 in UI => applications => actions => create new app (nodejs) and create
+* we create a load balancer (k8s service)
+	* stack: dev
+	* target port : 3000
+	* type: ClusterIP
+* after creating in the cluster we run `kubectl get svc` and see the nodejs-dev LB
+* we create a new Server Group
+	* stack: dev
+	* containers: spinnaker-node-demo (find it from docker)
+	* load balancer: nodejs-dev
+	* container port: 3000
+	* probes => port: 3000
+	* Create
+* from host we run `kubectl proxy` we get a proxy for the API. we visit the URL to see if app is running
+* in this way we can avoid using load balancer just for testing
+
+### Lecture 27 - Deploying on Kubernetes using Spinnaker (Part IV)
+
+* we will create the pipeline
+	* name=> trigger-deploy-to-dev
+	* automated trigger: Docker Registry
+	* registry name: dockerhub
+	* organization: achliopa
+	* image: achliopa/spinnaker-node-demo
+* add stage
+	* type: Deploy
+	* Stage-name: Deploy-to-dev
+	* add servergoup (nodejs-dev)
+	* image: tag resoved at runtime (latest)
+	* ADD
+* add stage
+	* type: Destroy Server Group
+	*  stage name: Destroy Server Group
+	* cluster: nodejs dev
+	* target: previous server group
+* we test bu pushing a change to github repo (separate branch) and do pull request on github for master

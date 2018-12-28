@@ -495,3 +495,52 @@ For more info on the Kubernetes integration for Spinnaker, visit:
 	* cluster: nodejs dev
 	* target: previous server group
 * we test bu pushing a change to github repo (separate branch) and do pull request on github for master
+
+## Section 9 - Linkerd
+
+### Lecture 28 - Introduction to Linkerd
+
+* on K8s we can run a lot of microservices on one cluster
+* it can quickly become difficult to manage the endpoints of all the different services that make up an app within the cluster
+	* service discovery in a cluster is limited
+	* routing is often on a round-robin basis 
+	* no failure handling (only removing pods that fail the healthcheck)
+	* difficult to visualize the different services
+* HTTP APIs can bee very basic and there is no failure handling (what id app A send HTTP GET to App B but is down? failed req no retry)
+* Linkerd solves these issues. It is a transparent proxy that adds:
+	* service discovery
+	* routing (latency aware LB)
+	* shift traffic for canary deployments
+	* failures (reties, deadlines, circuit breaking)
+	* visibilityL: using web UI
+* we will run linkerd on our nodes (DaemonSet)
+* we will have 2 hello services and 2 world services
+* linkerd is exposed with a LB 
+* client => LB => linkerd(node2) => hello(node2) => world(node2)
+* if world(node2) is down linklerd goes to linkerd(node1) => world(node1) transparently
+* how do pods find linkerd??? nslookup : noDENAME where nodename is an env var. each node has a linkerd port listening
+* hello needs to pass the linkerd proxy to reach world pod. this is  done in YAML config setting an http_proxy env var on node:4140 port
+
+### Lecture 29 - Demo: Linkerd
+
+* we spin a cluster on AWS (2 mediums 1 small)
+* we ssh in vagrant
+* linkerd works with http reqs through services (Inout)
+* we go to advanced-kubernetes-course/linkerd and apply linkerd.yml. it creates the daemon set, an lb and a configmap
+* it does transformations, routing in acomplex config map
+* the hello-world.yml starts the hello and world services going through the proxy
+* we follow README.md instructions `INGRESS_LB=$(kubectl get svc l5d -o jsonpath="{.status.loadBalancer.ingress[0].*}")`  and `echo http://$INGRESS_LB:9990`. we get the LB endpoint and launch it in browser
+* we look at outgoing dashboard and apply the hellow-world.yml
+* we want to contact the app `http_proxy=$INGRESS_LB:4140 curl -s http://hello` we hit multiple times to create traffic
+* we apply to see grafana
+```
+kubectl apply -f linkerd-viz.yml
+VIZ_INGRESS_LB=$(kubectl get svc linkerd-viz -o jsonpath="{.status.loadBalancer.ingress[0].*}")
+echo http://$VIZ_INGRESS_LB
+```
+
+## Section 10 - Federation
+
+### Lecture 30 - Introduction to Federation
+
+* 

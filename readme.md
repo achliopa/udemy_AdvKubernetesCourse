@@ -597,4 +597,30 @@ kubectl create namespace default --context=federated
 
 ### Lecture 32 - Introduction to Prometheus
 
-* 
+* Prometheus is a n open source monitoring and alerting tool
+* We can compare it to the heapster + grafana setup from first course. Prometheus can do a lot more
+* Built in Soundcloud, standalone and opensource project
+* Member of Cloud native Computing FOundation since 2016
+* Prometheus provides a multi-dimensional data model
+	* Time series identified by metric name and key/val pair
+* flexible query lang
+* no distributed storage necessary
+* metric collection through a http pull model
+* push is supproted with a gateway
+* service discovery supported
+* Web UI (dashboard) with graphingcap abilities
+* in our demo we will have 4 services. 2 kube-system and 1 app. 
+* ServiceMonitor stands between the services and Prometheus. they are uses per service to inject metrics
+* a Prometheus Operator will be deployed  to deploy resources that monitor our servcices  and deploys and manages a StatefulSet (Prometheus Server)
+
+### Lecture 33 - Demo: Prometheus
+
+* we need a cluster with 4gb nodes and 2gb master
+* we go to advanced-kubernetes-course/prometheus
+* we look at  README
+* we create rbac.yml as prometheus nees serviceaccount with priviledges
+* we create prometheus.yml. it has the deployment of prometheus-operator allowing to use prometheus resources i k8s. also a service (LB)
+* prometheus-resource.yml uses a CRD (Prometheus)
+* we create kubernetes-monitoring.yml create services to monitor and service monitors
+* we create the example-app.yml just a simple webapp
+* we check svc. to get LB link

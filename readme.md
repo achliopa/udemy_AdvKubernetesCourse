@@ -543,4 +543,58 @@ echo http://$VIZ_INGRESS_LB
 
 ### Lecture 30 - Introduction to Federation
 
+* Federation can be used to manage multiple clusters
+* we can sync resources across clusters. the same deployment version will run on cluster A and on cluster B
+* we can do cross cluster discovery. on DNS record / virtual IP (VIP) for a resource spanning multiple clusters
+* this can help achieve HA (High Availability) spreading load across clusters, enabling failover between clusters
+* reasons to run multiple clusters:
+	* Lower latency for customers (bringing app geographically closer to customer)
+	* Fault isolation when physical hardware fails
+	* Scale beyond cluster limits.
+	* Run clusters in hybrid cloud env (on-premise - failover to cloud)
+* Since kubernetes v1.5 we can use a tool called kubefed to administer our federated clusters
+	* add/remove clusters
+	* deploy a K8s federation control pane
+
+### Lecture 31 - Demo: Federation with kops
+
+* we go to vagrant vm on /advanced-kubernetes-course/federation
+* we look at README for instruction (OMG!)
+* we `$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)` to see current version. its 1.13.1
+* we download an old version of k8s `curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.7.2/kubernetes-client-linux-amd64.tar.gz`
+* chosing latest version might cause issues as kops might have not catch up
+* we move it to local bin `sudo mv kubernetes/client/bin/* /usr/local/bin/` and make them executable `sudo chmod +x /usr/local/bin/kube*`
+* we create 2 clusters in different zones
+```
+ kops create cluster --name=k8s.agileng.io --state=s3://kops-state-4213432 --zones=eu-central-1a --node-count=2 --node-size=t2.small --master-size=t2.small --dns-zone=k8s.agileng.io
+kops create cluster --name=k8s-2.agileng.io --state=s3://kops-state-4213432 --zones=eu-central-1b --node-count=2 --node-size=t2.small --master-size=t2.small --dns-zone=k8s-2.agileng.io
+kops update cluster k8s.agileng.io --yes --state=s3://kops-state-4213432
+kops update cluster k8s-2.agileng.io --yes --state=s3://kops-state-4213432
+```
+* we need to add a second hosted zone and link it to our DNS provider
+* its good to say to Route53 to create a federated namespace as kubefed can create hosted zones for us
+* we need to play with IAM to allow k8s.agileng.io to create records on federated namespace
+* kops creates IAM policies only for cluster namespaces
+* in IAM roles nodes.k8s.agileng.io i edit the policy and got o JSON in route53 section adding a new section ofr a new hosted zone adding the ID of the federated . this is not a permanent solution . it will be overriten with kops edit and update
+* to see both clusters i run `kubectll config get-context` and `kubectl config use-context k8s.agileng.io`
+* once clusters have started we can initialize federations with `kubefed init federated --host-cluster-context=k8s.agileng.io --dns-provider="aws-route53" --dns-zone-name="federated.agileng.io.`
+* thingsget started. it creates a PVC for etcd data
+* the ELB created is a service of the primary cluster.
+* if i run get-contexts i have 3 k8s k8s-2 and federated 
+* i `kubectl config use-context federated` 
+* i can now join both clusters
+```
+kubefed join kubernetes-2 --host-cluster-context=k8s.agileng.io --cluster-context=k8s-2.agileng.io
+kubefed join kubernetes-1 --host-cluster-context=k8s.agileng.io --cluster-context=k8s.agileng.io
+kubectl create namespace default --context=federated
+```
+* i can now use --context=federated in my kubectl commands so that my staate change will apply to the joined federatedcluster
+* pods and services are distributed along clusters. zone rules apply
+* in federated hostname (route53) cnames are added automatically as nodes and masters need to access it
+* in alias for ELB i can add failover for second elb
+
+## Section 11 - Monitoring
+
+### Lecture 32 - Introduction to Prometheus
+
 * 
